@@ -26,7 +26,7 @@ export default function AuthPage() {
     setMounted(true);
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      if (session) router.replace('/');
+      if (session) router.replace('/team'); // ✅ Redirect to Team page, not Home
     });
   }, [router]);
 
@@ -46,7 +46,7 @@ export default function AuthPage() {
         if (!data.session) throw new Error('Login succeeded but no session returned.');
         setMessage({ type: 'success', text: 'ACCESS GRANTED. REDIRECTING...' });
         await new Promise(r => setTimeout(r, 800));
-        router.replace('/');
+        router.replace('/team'); // ✅ Redirect to Team page, not Home
       } else {
         if (!formData.name || !formData.department) throw new Error('PLEASE FILL IN ALL FIELDS');
         const selectedDept = departments.find(d => d.name === formData.department);
@@ -65,7 +65,7 @@ export default function AuthPage() {
         if (authData.session) {
           setMessage({ type: 'success', text: 'REGISTERED! ENTERING...' });
           await new Promise(r => setTimeout(r, 800));
-          router.replace('/');
+          router.replace('/team'); // ✅ Redirect to Team page, not Home
         } else {
           setMessage({ type: 'success', text: `REGISTERED! CHECK ${formData.email.toUpperCase()} TO CONFIRM.` });
           setTimeout(() => setIsLogin(true), 3000);
