@@ -265,11 +265,14 @@ export default function AdminPage() {
       await loadAll();
       setLoading(false);
     })();
+
+    // ✅ FIX APPLIED HERE: Explicitly typed the 'data' variable to eliminate the implicit 'any' error
     const priceSub = supabase.channel('admin-prices').on('postgres_changes',{event:'*',schema:'public',table:'player_prices'},()=>{
-      supabase.from('player_prices').select('*').then(({data})=>{
+      supabase.from('player_prices').select('*').then(({ data }: { data: PlayerPrice[] | null }) => {
         if(data && data.length > 0) setPlayers(data as PlayerPrice[]);
       });
     }).subscribe();
+
     const matchSub = supabase.channel('admin-matches').on('postgres_changes',{event:'*',schema:'public',table:'matches'},()=>loadAll()).subscribe();
     const lineupSub = supabase.channel('admin-lineups').on('postgres_changes',{event:'*',schema:'public',table:'match_lineups'},()=>loadAll()).subscribe();
     return()=>{supabase.removeChannel(priceSub);supabase.removeChannel(matchSub);supabase.removeChannel(lineupSub);};
