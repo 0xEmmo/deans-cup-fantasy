@@ -387,7 +387,7 @@ export default function TeamPage() {
         });
     }, 10000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => setUser(session?.user ?? null));
     return () => {
       subscription.unsubscribe();
       supabase.removeChannel(priceSub);
