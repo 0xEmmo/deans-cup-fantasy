@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
 const DEPT_COLORS: Record<string, string> = {
   Statistics: "#FF0000",
@@ -14,7 +15,7 @@ const DEPT_COLORS: Record<string, string> = {
 };
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [team, setTeam] = useState<any>(null);
   const [authState, setAuthState] = useState<"loading" | "authed" | "guest">(
@@ -79,9 +80,10 @@ export default function ProfilePage() {
 
     load();
 
+    // ✅ FIX: Explicitly typed parameters
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (event === "SIGNED_OUT") setAuthState("guest");
       if (event === "SIGNED_IN" && session) {
         setUser(session.user);
