@@ -87,7 +87,8 @@ function formatTimer(seconds: number, half: 'first'|'second'): string {
 }
 
 const iCls = 'w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 outline-none focus:border-[#00ff87]/50 placeholder-white/20 transition-colors';
-const sBadge = (pos: Position) => ({ GK:'#f59e0b',DEF:'#3b82f6',MID:'#10b981',FWD:'#ef4444' }[pos]||'#888');
+// ✅ FIX: sBadge now takes a string, not 'Position' (which wasn't defined)
+const sBadge = (pos: string) => ({ GK:'#f59e0b',DEF:'#3b82f6',MID:'#10b981',FWD:'#ef4444' }[pos]||'#888');
 
 // ─── LIVE MATCH CONTROL ──────────────────────────────────────────────────
 function LiveMatchControl({ match, onUpdate, showMsg }: { match: Match; onUpdate:()=>void; showMsg:(t:'success'|'error',m:string)=>void }) {
@@ -650,7 +651,7 @@ export default function AdminPage() {
                                     onChange={() => toggleLineupPlayer(m.id, p, side)}
                                   />
                                   <span className="text-white text-xs font-bold">{p.name}</span>
-                                  <span className="text-[10px] px-1.5 rounded text-white font-black" style={{background:sBadge(p.position as Position)}}>{p.position}</span>
+                                  <span className="text-[10px] px-1.5 rounded text-white font-black" style={{background:sBadge(p.position)}}>{p.position}</span>
                                 </label>
                               );
                             })}
@@ -730,7 +731,7 @@ export default function AdminPage() {
               <div className="px-5 py-3 flex justify-between items-center" style={{background:'rgba(0,0,0,0.4)',borderBottom:'1px solid rgba(255,255,255,0.05)'}}><p className="text-white font-black text-sm">Player Prices <span className="text-white/30 font-normal">({filteredPlayers.length})</span></p><p className="text-white/20 text-xs">Edit · auto-saves on blur</p></div>
               {filteredPlayers.map((p,i)=>{const cur=editedPrices[p.id]!==undefined?editedPrices[p.id]:p.price;const changed=editedPrices[p.id]!==undefined&&editedPrices[p.id]!==p.price;return(
                 <div key={p.id} className="flex items-center justify-between px-5 py-3 flex-wrap gap-2" style={{background:i%2===0?'rgba(255,255,255,0.02)':'transparent',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
-                  <div className="flex items-center gap-3"><span className="text-[10px] font-black px-2 py-0.5 rounded-lg text-white" style={{background:sBadge(p.position as Position)}}>{p.position}</span><div><p className="text-white font-bold text-sm">{p.name}</p><p className="text-white/30 text-xs">{p.department}</p></div></div>
+                  <div className="flex items-center gap-3"><span className="text-[10px] font-black px-2 py-0.5 rounded-lg text-white" style={{background:sBadge(p.position)}}>{p.position}</span><div><p className="text-white font-bold text-sm">{p.name}</p><p className="text-white/30 text-xs">{p.department}</p></div></div>
                   <div className="flex items-center gap-2">
                     <input type="number" step="0.1" min="1.0" max="20.0" value={cur} onChange={e=>handlePriceChange(p.id,e.target.value)} onBlur={()=>savePriceOnBlur(p)} className="w-20 bg-white/10 border border-white/20 text-white font-bold text-center rounded-lg px-2 py-1 text-sm outline-none focus:border-[#00ff87]/50" style={{color:changed?'#fbbf24':'#00ff87'}}/>
                     {changed&&<span className="text-xs text-yellow-400 font-bold">✎</span>}
@@ -755,7 +756,7 @@ export default function AdminPage() {
                     {searchedPlayers.slice(0,8).map(p=>(
                       <button key={p.id} onClick={()=>{setPointsForm(prev=>({...prev,player_id:p.id,player_name:p.name}));setPointsSearch('');}} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 text-left border-b border-white/5 last:border-0">
                         <span className="text-white text-sm font-bold">{p.name}</span>
-                        <span className="flex items-center gap-2"><span className="text-[10px] font-black px-2 py-0.5 rounded text-white" style={{background:sBadge(p.position as Position)}}>{p.position}</span><span className="text-white/30 text-xs">{p.department}</span></span>
+                        <span className="flex items-center gap-2"><span className="text-[10px] font-black px-2 py-0.5 rounded text-white" style={{background:sBadge(p.position)}}>{p.position}</span><span className="text-white/30 text-xs">{p.department}</span></span>
                       </button>
                     ))}
                   </div>
