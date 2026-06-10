@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+// 👇 ADD THIS LINE HERE 👇
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { User } from '@supabase/supabase-js';
 
 type Position = 'GK' | 'DEF' | 'MID' | 'FWD';
@@ -387,7 +389,7 @@ export default function TeamPage() {
         });
     }, 10000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => setUser(session?.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => setUser(session?.user ?? null));
     return () => {
       subscription.unsubscribe();
       supabase.removeChannel(priceSub);
