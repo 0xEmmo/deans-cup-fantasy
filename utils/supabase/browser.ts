@@ -1,33 +1,12 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-
 /**
- * Singleton browser-side Supabase client built with `@supabase/supabase-js`.
+ * utils/supabase/browser.ts
  *
- * This is intended for use only in Client Components ("use client").
- * It persists the auth session in localStorage so the user stays signed in
- * across page reloads.
+ * FIXED: Previously used @supabase/supabase-js directly which stores sessions
+ * under different localStorage keys than @supabase/ssr (used in client.ts).
+ * This caused the "session doesn't stick" bug — login worked but other pages
+ * couldn't read the session because they were looking in the wrong place.
+ *
+ * Solution: Re-export from client.ts so the entire app shares ONE client
+ * instance with ONE session storage location.
  */
-let browserClient: SupabaseClient | null = null;
-
-export function createBrowserSupabaseClient(): SupabaseClient {
-  if (browserClient) return browserClient;
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Missing Supabase environment variables. Make sure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in .env.local."
-    );
-  }
-
-  browserClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-
-  return browserClient;
-}
+export { createClient as createBrowserSupabaseClient } from "./client";

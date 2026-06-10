@@ -1,374 +1,265 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { createBrowserSupabaseClient } from "@/utils/supabase/browser";
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function AuthPage() {
+  const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    department: "",
-  });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "error" | "success";
-    text: string;
-  } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', department: '' });
+  const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const departments = [
-    { id: 1, name: "Philosophy" },
-    { id: 2, name: "Engineering" },
-    { id: 3, name: "Law" },
-    { id: 5, name: "Business" },
+    { id: 1, name: 'Statistics',              abbr: 'ASSON'   },
+    { id: 2, name: 'Chemistry',               abbr: 'SCSN'    },
+    { id: 3, name: 'Mathematics',             abbr: 'NAMSSN'  },
+    { id: 4, name: 'Environmental Standards', abbr: 'PESSA'   },
+    { id: 5, name: 'Physics',                 abbr: 'PHY'     },
+    { id: 6, name: 'Geosciences',             abbr: 'GEO'     },
   ];
+
+  useEffect(() => {
+    setMounted(true);
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace('/');
+    });
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-
-    const supabase = createBrowserSupabaseClient();
+    const supabase = createClient();
 
     try {
       if (isLogin) {
-        // Handle Sign In
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         });
-
         if (error) throw error;
-
-        setMessage({
-          type: "success",
-          text: "Successfully signed in! Redirecting...",
-        });
-
-        // Redirect to home page after successful login
-        setTimeout(() => {
-          window.location.href = "/";
-        }, 1500);
+        if (!data.session) throw new Error('Login succeeded but no session returned.');
+        setMessage({ type: 'success', text: 'ACCESS GRANTED. REDIRECTING...' });
+        await new Promise(r => setTimeout(r, 800));
+        router.replace('/');
       } else {
-        // Handle Sign Up
-        if (!formData.name || !formData.department) {
-          throw new Error("Please fill in all required fields");
-        }
-
-        const selectedDept = departments.find(
-          (d) => d.name === formData.department
-        );
-
-        if (!selectedDept) {
-          throw new Error("Please select a valid department");
-        }
-
-        // Step 1: Create auth user via Supabase Auth.
-        // We pass the name as user metadata so it's also available on the
-        // auth.users record (some projects use a DB trigger to mirror this
-        // into public.users automatically).
-        const { data: authData, error: authError } =
-          await supabase.auth.signUp({
-            email: formData.email,
-            password: formData.password,
-            options: {
-              data: {
-                name: formData.name,
-                department_id: selectedDept.id,
-              },
-            },
-          });
-
-        if (authError) throw authError;
-
-        if (!authData.user) {
-          throw new Error("Failed to create user account");
-        }
-
-        // Step 2: Insert the user's extra details into our custom
-        // public.users table. We use upsert + ignoreDuplicates so that
-        // if a DB trigger has already created the row, we don't error.
-        const { error: profileError } = await supabase
-          .from("users")
-          .upsert(
-            {
-              id: authData.user.id,
-              name: formData.name,
-              email: formData.email,
-              department_id: selectedDept.id,
-            },
-            { onConflict: "id", ignoreDuplicates: false }
-          );
-
-        if (profileError) throw profileError;
-
-        // If Supabase returns a user but no session, email confirmation
-        // is required before sign-in.
-        const needsEmailConfirmation = !authData.session;
-
-        setMessage({
-          type: "success",
-          text: needsEmailConfirmation
-            ? `Account created! Please check ${formData.email} to confirm your address before signing in.`
-            : "Account created successfully! You can now sign in.",
-        });
-
-        // Clear form and switch to login mode
-        setFormData({
-          name: "",
+        if (!formData.name || !formData.department) throw new Error('PLEASE FILL IN ALL FIELDS');
+        const selectedDept = departments.find(d => d.name === formData.department);
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
-          password: "",
-          department: "",
+          password: formData.password,
+          options: { data: { name: formData.name, department: formData.department } },
         });
-
-        setTimeout(() => {
-          setIsLogin(true);
-        }, 2500);
+        if (authError) throw authError;
+        if (!authData.user) throw new Error('SIGNUP FAILED — TRY AGAIN');
+        const { error: profileError } = await supabase.from('users').upsert([{
+          id: authData.user.id, name: formData.name, email: formData.email,
+          department: formData.department, department_id: selectedDept?.id || null,
+        }], { onConflict: 'id', ignoreDuplicates: false });
+        if (profileError) console.error('Profile sync error:', profileError);
+        if (authData.session) {
+          setMessage({ type: 'success', text: 'REGISTERED! ENTERING...' });
+          await new Promise(r => setTimeout(r, 800));
+          router.replace('/');
+        } else {
+          setMessage({ type: 'success', text: `REGISTERED! CHECK ${formData.email.toUpperCase()} TO CONFIRM.` });
+          setTimeout(() => setIsLogin(true), 3000);
+        }
       }
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred. Please try again.";
-      setMessage({
-        type: "error",
-        text: errorMessage,
-      });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message.toUpperCase() });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  if (!mounted) return null;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-      <div className="w-full max-w-md">
-        {/* Card Container */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-center">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Dean&apos;s Cup Fantasy
-            </h1>
-            <p className="text-indigo-100">
-              {isLogin ? "Welcome back!" : "Join the competition"}
+    <div className="min-h-screen flex items-center justify-center p-4 font-sans relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 40%, #0a1628 100%)' }}>
+
+      {/* Background pitch texture — subtle diagonal lines */}
+      <div className="absolute inset-0 z-0 opacity-[0.04]"
+        style={{ backgroundImage: 'repeating-linear-gradient(45deg, #c9a84c 0px, #c9a84c 1px, transparent 1px, transparent 60px)', backgroundSize: '84px 84px' }}/>
+
+      {/* Soft glow blobs */}
+      <div className="absolute top-1/4 left-1/4 w-80 h-80 rounded-full blur-3xl opacity-10 pointer-events-none"
+        style={{ background: '#c9a84c' }}/>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full blur-3xl opacity-8 pointer-events-none"
+        style={{ background: '#1a56db' }}/>
+
+      {/* Background image overlay — replaced with PES Logo */}
+      <div 
+        className="absolute inset-0 z-0" 
+        style={{ 
+          backgroundImage: "url('/PES LOGO.png')", 
+          backgroundSize: 'contain', 
+          backgroundPosition: 'center', 
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.12 
+        }}
+      />
+
+      <div className="w-full max-w-md relative z-10">
+
+        {/* Header */}
+        <div className="flex flex-col items-center mb-8">
+          {/* Crest / logo mark — now just the logo, bigger */}
+          <div className="relative mb-4">
+            <img 
+              src="/PES LOGO.png" 
+              alt="PES Logo" 
+              className="w-40 h-40 object-contain drop-shadow-2xl"
+            />
+          </div>
+
+          <h1 className="text-2xl font-black uppercase tracking-tight text-center leading-tight">
+            <span className="text-white">Dean&apos;s Games</span>{' '}
+            <span style={{ color: '#c9a84c' }}>Fantasy</span>
+          </h1>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="h-px w-12 opacity-30" style={{ background: '#c9a84c' }}/>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'rgba(201,168,76,0.6)' }}>
+              Physical &amp; Earth Sciences
             </p>
+            <div className="h-px w-12 opacity-30" style={{ background: '#c9a84c' }}/>
+          </div>
+        </div>
+
+        {/* Card */}
+        <div className="rounded-2xl overflow-hidden shadow-2xl"
+          style={{ background: 'rgba(13,31,60,0.85)', border: '1px solid rgba(201,168,76,0.2)', backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(201,168,76,0.1)' }}>
+
+          {/* Tab switcher */}
+          <div className="flex" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+            {[{ key: true, label: 'Sign In' }, { key: false, label: 'Register' }].map(t => (
+              <button key={String(t.key)} onClick={() => { setIsLogin(t.key); setMessage(null); }}
+                className="flex-1 py-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all relative"
+                style={{ color: isLogin === t.key ? '#c9a84c' : 'rgba(255,255,255,0.3)' }}>
+                {t.label}
+                {isLogin === t.key && (
+                  <div className="absolute bottom-0 left-6 right-6 h-0.5 rounded-full"
+                    style={{ background: 'linear-gradient(90deg, transparent, #c9a84c, transparent)' }}/>
+                )}
+              </button>
+            ))}
           </div>
 
-          {/* Toggle Buttons */}
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 py-4 text-center font-semibold transition-all ${
-                isLogin
-                  ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-4 text-center font-semibold transition-all ${
-                !isLogin
-                  ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              Register
-            </button>
-          </div>
-
-          {/* Message Display */}
+          {/* Message banner */}
           {message && (
-            <div
-              className={`mx-8 mt-6 p-4 rounded-lg ${
-                message.type === "error"
-                  ? "bg-red-50 border border-red-200 text-red-700"
-                  : "bg-green-50 border border-green-200 text-green-700"
-              }`}
-            >
-              <p className="text-sm font-medium">{message.text}</p>
+            <div className={`mx-6 mt-5 py-2.5 px-4 rounded-xl text-center text-[9px] font-black uppercase tracking-widest border ${
+              message.type === 'error'
+                ? 'bg-red-900/30 border-red-500/30 text-red-400'
+                : 'border-opacity-40 text-opacity-90'
+            }`}
+              style={message.type === 'success' ? { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.35)', color: '#c9a84c' } : {}}>
+              {message.text}
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-8 space-y-6">
-            {/* Name Field - Only for Registration */}
+          <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5 space-y-4">
+
             {!isLogin && (
               <div>
-                <label
-                  htmlFor="name"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Full Name
+                <label className="block text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: 'rgba(201,168,76,0.7)' }}>
+                  Manager Name
                 </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required={!isLogin}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                  placeholder="Enter your full name"
+                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required={!isLogin}
+                  placeholder="Your full name"
+                  className="w-full px-4 py-3.5 rounded-xl text-white font-bold text-sm placeholder:text-white/20 outline-none transition-all"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  onFocus={e => e.target.style.borderColor = 'rgba(201,168,76,0.5)'}
+                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
                 />
               </div>
             )}
 
-            {/* Email Field */}
             <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Email Address
+              <label className="block text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: 'rgba(201,168,76,0.7)' }}>
+                Email
               </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                placeholder="Enter your email"
+              <input type="email" name="email" value={formData.email} onChange={handleInputChange} required
+                placeholder="your@email.com"
+                className="w-full px-4 py-3.5 rounded-xl text-white font-bold text-sm placeholder:text-white/20 outline-none transition-all"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                onFocus={e => e.target.style.borderColor = 'rgba(201,168,76,0.5)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
               />
             </div>
 
-            {/* Password Field */}
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
+              <label className="block text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: 'rgba(201,168,76,0.7)' }}>
                 Password
               </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                placeholder="Enter your password"
+              <input type="password" name="password" value={formData.password} onChange={handleInputChange} required
+                placeholder="••••••••"
+                className="w-full px-4 py-3.5 rounded-xl text-white font-bold text-sm placeholder:text-white/20 outline-none transition-all"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                onFocus={e => e.target.style.borderColor = 'rgba(201,168,76,0.5)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
               />
             </div>
 
-            {/* Department Dropdown - Only for Registration */}
             {!isLogin && (
               <div>
-                <label
-                  htmlFor="department"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
+                <label className="block text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: 'rgba(201,168,76,0.7)' }}>
                   Department
                 </label>
-                <select
-                  id="department"
-                  name="department"
-                  value={formData.department}
-                  onChange={handleInputChange}
-                  required={!isLogin}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none bg-white"
-                >
-                  <option value="">Select your department</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.name}>
-                      {dept.name}
+                <select name="department" value={formData.department} onChange={handleInputChange} required={!isLogin}
+                  className="w-full px-4 py-3.5 rounded-xl text-white font-bold text-sm appearance-none cursor-pointer outline-none transition-all"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <option value="" style={{ background: '#0d1f3c' }}>Select your department</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.name} style={{ background: '#0d1f3c' }}>
+                      {d.name} ({d.abbr})
                     </option>
                   ))}
                 </select>
               </div>
             )}
 
-            {/* Forgot Password Link - Only for Login */}
-            {isLogin && (
-              <div className="flex items-center justify-end">
-                <a
-                  href="#"
-                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                >
-                  Forgot password?
-                </a>
-              </div>
-            )}
+            {/* Divider */}
+            <div className="h-px w-full opacity-10 my-1" style={{ background: '#c9a84c' }}/>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transform hover:scale-[1.02] transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <span>{isLogin ? "Sign In" : "Create Account"}</span>
-              )}
+            {/* Submit */}
+            <button type="submit" disabled={loading}
+              className="w-full py-4 rounded-xl font-black uppercase tracking-[0.15em] text-[12px] transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+              style={{ background: 'linear-gradient(135deg, #c9a84c, #a8863a)', color: '#0d1f3c', boxShadow: '0 4px 20px rgba(201,168,76,0.25)' }}>
+              {/* Shine effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.15), transparent)' }}/>
+              <span className="relative">
+                {loading ? 'Processing...' : isLogin ? '→ Enter Technical Area' : '→ Register Official Club'}
+              </span>
             </button>
-
-            {/* Additional Info */}
-            <p className="text-center text-sm text-gray-600 mt-4">
-              {isLogin ? (
-                <>
-                  Don&apos;t have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => setIsLogin(false)}
-                    className="text-indigo-600 hover:text-indigo-800 font-semibold"
-                  >
-                    Register here
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => setIsLogin(true)}
-                    className="text-indigo-600 hover:text-indigo-800 font-semibold"
-                  >
-                    Login here
-                  </button>
-                </>
-              )}
-            </p>
           </form>
         </div>
 
-        {/* Footer Text */}
-        <p className="text-center text-white text-sm mt-6 drop-shadow-lg">
-          © 2026 Dean&apos;s Cup Fantasy. All rights reserved.
+        {/* Department quick reference */}
+        {!isLogin && (
+          <div className="mt-4 rounded-xl p-3 grid grid-cols-3 gap-1.5"
+            style={{ background: 'rgba(13,31,60,0.5)', border: '1px solid rgba(201,168,76,0.1)' }}>
+            {departments.map(d => (
+              <div key={d.id} className="text-center py-1">
+                <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: '#c9a84c' }}>{d.abbr}</p>
+                <p className="text-[8px] text-white/30 mt-0.5 truncate">{d.name.split(' ')[0]}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-center text-[9px] font-black mt-6 uppercase tracking-widest" style={{ color: 'rgba(201,168,76,0.3)' }}>
+          Dean&apos;s Games Fantasy · Unilag · 2026
         </p>
       </div>
     </div>

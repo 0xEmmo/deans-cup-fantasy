@@ -24,3 +24,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+@keyframes swipe-hint {
+  0%, 100% { transform: translateX(0); opacity: 0.4; }
+  50% { transform: translateX(12px); opacity: 1; }
+}
+
+.animate-swipe-hint {
+  animation: swipe-hint 2s ease-in-out infinite;
+}
