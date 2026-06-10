@@ -33,34 +33,30 @@ const sBadge = (pos: string) => ({ GK:'#f59e0b',DEF:'#3b82f6',MID:'#10b981',FWD:
 export default function FixturesPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [lineups, setLineups] = useState<Record<string, MatchLineup[]>>({});
-  const [refreshing, setRefreshing] = useState(false);
   const supabase = createClient();
 
-  const loadData = async () => {
-    setRefreshing(true);
-    const { data: m } = await supabase.from('matches').select('*').order('played_at', { ascending: false });
-    setMatches(m || []);
-
-    const { data: l } = await supabase.from('match_lineups').select('*');
-    const grouped: Record<string, MatchLineup[]> = {};
-    l?.forEach(item => {
-      if (!grouped[item.match_id]) grouped[item.match_id] = [];
-      grouped[item.match_id].push(item);
-    });
-    setLineups(grouped);
-    setRefreshing(false);
-  };
-
   useEffect(() => {
-    loadData();
+    const load = async () => {
+      const { data: m } = await supabase.from('matches').select('*').order('played_at', { ascending: false });
+      setMatches(m || []);
+
+      const { data: l } = await supabase.from('match_lineups').select('*');
+      const grouped: Record<string, MatchLineup[]> = {};
+      // ✅ FIX: Added explicit type (item: MatchLineup)
+      l?.forEach((item: MatchLineup) => {
+        if (!grouped[item.match_id]) grouped[item.match_id] = [];
+        grouped[item.match_id].push(item);
+      });
+      setLineups(grouped);
+    };
+    load();
 
     // Subscribe to real-time changes
     const matchSub = supabase.channel('fixtures-matches')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => load())
       .subscribe();
-
     const lineupSub = supabase.channel('fixtures-lineups')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_lineups' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_lineups' }, () => load())
       .subscribe();
 
     return () => {
@@ -72,19 +68,8 @@ export default function FixturesPage() {
   return (
     <div className="min-h-screen p-4 md:p-6" style={{ background: 'radial-gradient(ellipse at top,#0d0020 0%,#080010 60%,#040008 100%)' }}>
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl md:text-4xl font-black text-white mb-2">📋 Fixtures &amp; Line-ups</h1>
-            <p className="text-white/30 text-sm font-medium">{matches.length} matches scheduled</p>
-          </div>
-          <button
-            onClick={loadData}
-            disabled={refreshing}
-            className="px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all disabled:opacity-50 bg-blue-600/30 text-blue-400 border border-blue-600/40 hover:bg-blue-600/50"
-          >
-            {refreshing ? 'Refreshing...' : '🔄 Refresh'}
-          </button>
-        </div>
+        <h1 className="text-2xl md:text-4xl font-black text-white mb-2">📋 Fixtures &amp; Line-ups</h1>
+        <p className="text-white/30 text-sm mb-8 font-medium">{matches.length} matches scheduled</p>
 
         <div className="space-y-6">
           {matches.length === 0 && (
