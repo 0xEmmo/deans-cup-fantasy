@@ -11,7 +11,7 @@ webpush.setVapidDetails(
 
 export async function POST(request: NextRequest) {
   const { event, payload } = await request.json();
-  const supabase = createClient();
+  const supabase = await createClient(); // ✅ FIXED: Added 'await'
 
   // Decide the notification content based on the event
   let title = 'Dean\'s Cup Fantasy';
