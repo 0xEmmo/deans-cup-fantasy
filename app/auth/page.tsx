@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import type { Session } from '@supabase/supabase-js';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function AuthPage() {
   useEffect(() => {
     setMounted(true);
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       if (session) router.replace('/');
     });
   }, [router]);
@@ -97,17 +98,8 @@ export default function AuthPage() {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full blur-3xl opacity-8 pointer-events-none"
         style={{ background: '#1a56db' }}/>
 
-      {/* Background image overlay — replaced with PES Logo */}
-      <div 
-        className="absolute inset-0 z-0" 
-        style={{ 
-          backgroundImage: "url('/PES LOGO.png')", 
-          backgroundSize: 'contain', 
-          backgroundPosition: 'center', 
-          backgroundRepeat: 'no-repeat',
-          opacity: 0.12 
-        }}
-      />
+      {/* Background image overlay if present */}
+      <div className="absolute inset-0 z-0" style={{ backgroundImage: "url('/Loginpage.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.06 }}/>
 
       <div className="w-full max-w-md relative z-10">
 
