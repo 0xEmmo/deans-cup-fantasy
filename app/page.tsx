@@ -194,7 +194,8 @@ export default function Home() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    // ✅ FIX: Explicitly type the 'user' parameter
+    supabase.auth.getUser().then(({ data: { user } }: { data: { user: User | null } }) => {
       setUser(user);
       setLoading(false);
     });
