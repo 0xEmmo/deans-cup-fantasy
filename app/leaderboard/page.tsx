@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import type { User } from '@supabase/supabase-js';
+import type { User, AuthChangeEvent } from '@supabase/supabase-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface Match {
@@ -252,7 +252,8 @@ export default function LeaderboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'player_gameweek_points' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_teams' }, load)
       .subscribe();
-    const authSub = supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null));
+    // ✅ FIX: Explicitly type the '_' parameter as AuthChangeEvent
+    const authSub = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session) => setUser(session?.user ?? null));
     return () => {
       supabase.removeChannel(matchSub);
       authSub.data.subscription.unsubscribe();
