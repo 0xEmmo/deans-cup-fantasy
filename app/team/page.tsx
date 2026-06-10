@@ -348,7 +348,7 @@ export default function TeamPage() {
           .from('player_prices')
           .select('id, name, jersey_name, number, position, department, price')
           .order('price', { ascending: false })
-          .then(({ data }) => {
+          .then(({ data }: { data: any[] | null }) => {
             if (data) {
               const mapped: Player[] = data.map((p: any) => ({
                 id: p.id,
@@ -371,7 +371,7 @@ export default function TeamPage() {
         .from('player_prices')
         .select('id, name, jersey_name, number, position, department, price')
         .order('price', { ascending: false })
-        .then(({ data }) => {
+        .then(({ data }: { data: any[] | null }) => {
           if (data) {
             const mapped: Player[] = data.map((p: any) => ({
               id: p.id,
