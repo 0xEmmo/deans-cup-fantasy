@@ -6,17 +6,16 @@ import { createClient } from '@/utils/supabase/server';
 // ✅ Prevents this route from being statically generated at build time
 export const dynamic = 'force-dynamic';
 
-// ✅ Only set VAPID details if environment variables exist (prevents build crash)
-if (
-  process.env.VAPID_EMAIL &&
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
-  process.env.VAPID_PRIVATE_KEY
-) {
-  webpush.setVapidDetails(
-    process.env.VAPID_EMAIL,
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  );
+// ✅ Build the VAPID subject with 'mailto:' prefix
+const email = process.env.VAPID_EMAIL || '';
+const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
+const privateKey = process.env.VAPID_PRIVATE_KEY || '';
+
+const vapidSubject = email.startsWith('mailto:') ? email : `mailto:${email}`;
+
+// ✅ Only set VAPID details if all environment variables exist
+if (vapidSubject && publicKey && privateKey) {
+  webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
 } else {
   console.warn('⚠️ VAPID environment variables missing — Web Push will not work');
 }
