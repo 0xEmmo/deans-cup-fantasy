@@ -3,17 +3,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import webpush from 'web-push';
 import { createClient } from '@/utils/supabase/server';
 
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+// ✅ Prevents this route from being statically generated at build time
+export const dynamic = 'force-dynamic';
+
+// ✅ Only set VAPID details if environment variables exist (prevents build crash)
+if (
+  process.env.VAPID_EMAIL &&
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
+  process.env.VAPID_PRIVATE_KEY
+) {
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL,
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+} else {
+  console.warn('⚠️ VAPID environment variables missing — Web Push will not work');
+}
 
 export async function POST(request: NextRequest) {
   const { event, payload } = await request.json();
-  const supabase = await createClient(); // ✅ FIXED: Added 'await'
+  const supabase = await createClient();
 
-  // Decide the notification content based on the event
   let title = 'Dean\'s Cup Fantasy';
   let body = '';
   let url = '/';
@@ -35,7 +46,6 @@ export async function POST(request: NextRequest) {
       body = 'New update available';
   }
 
-  // Fetch all subscriptions
   const { data: subs } = await supabase.from('push_subscriptions').select('subscription');
 
   if (!subs) return NextResponse.json({ success: false, message: 'No subscribers' });
