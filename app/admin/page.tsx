@@ -87,7 +87,6 @@ function formatTimer(seconds: number, half: 'first'|'second'): string {
 }
 
 const iCls = 'w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 outline-none focus:border-[#00ff87]/50 placeholder-white/20 transition-colors';
-// ✅ FIX: sBadge now takes a string, not 'Position' (which wasn't defined)
 const sBadge = (pos: string) => ({ GK:'#f59e0b',DEF:'#3b82f6',MID:'#10b981',FWD:'#ef4444' }[pos]||'#888');
 
 // ─── LIVE MATCH CONTROL ──────────────────────────────────────────────────
@@ -198,7 +197,6 @@ export default function AdminPage() {
   const [pointsForm, setPointsForm] = useState<PlayerPoints>({player_id:'',player_name:'',gameweek:1,minutes_played:90,goals:0,assists:0,clean_sheet:false,yellow_cards:0,red_cards:0,penalty_saves:0,penalty_misses:0,shots_saved:0,goals_conceded:0,own_goals:0,cbit:0,bonus:0});
   const [pointsSearch, setPointsSearch] = useState('');
 
-  // ─── LINEUP STATE ──────────────────────────────────────────────────────
   const [selectedLineup, setSelectedLineup] = useState<Record<string, { player_id: string; player_name: string; position: string; team_side: 'home' | 'away' }[]>>({});
   const [existingLineups, setExistingLineups] = useState<MatchLineup[]>([]);
 
@@ -221,11 +219,10 @@ export default function AdminPage() {
     setUsers(userRes.data||[]);
     setStats({totalUsers:uCount.count||0,teamsSubmitted:tCount.count||0,currentGW:twRes.data?.gameweek||1});
     const {data:priceData} = await supabase.from('player_prices').select('*').order('department').order('position').order('name');
-    if(priceData && priceData.length > 0) setPlayers(priceData as PlayerPrice[]);
+    if(priceData&&priceData.length>0) setPlayers(priceData as PlayerPrice[]);
     if(lineupRes.data) setExistingLineups(lineupRes.data);
   },[supabase]);
 
-  // ─── LOAD EXISTING LINEUPS INTO STATE ──────────────────────────────
   useEffect(() => {
     if (existingLineups.length === 0) return;
     
@@ -266,7 +263,6 @@ export default function AdminPage() {
       setLoading(false);
     })();
 
-    // ✅ FIX APPLIED HERE: Explicitly typed the 'data' variable to eliminate the implicit 'any' error
     const priceSub = supabase.channel('admin-prices').on('postgres_changes',{event:'*',schema:'public',table:'player_prices'},()=>{
       supabase.from('player_prices').select('*').then(({ data }: { data: PlayerPrice[] | null }) => {
         if(data && data.length > 0) setPlayers(data as PlayerPrice[]);
@@ -278,7 +274,6 @@ export default function AdminPage() {
     return()=>{supabase.removeChannel(priceSub);supabase.removeChannel(matchSub);supabase.removeChannel(lineupSub);};
   },[supabase,loadAll]);
 
-  // ─── LINEUP FUNCTIONS ────────────────────────────────────────────────
   const toggleLineupPlayer = (matchId: string, player: PlayerPrice, side: 'home' | 'away') => {
     setSelectedLineup(prev => {
       const key = `${matchId}-${side}`;
@@ -291,10 +286,6 @@ export default function AdminPage() {
     });
   };
 
-  // ─── FIXED saveLineups ───────────────────────────────────────────────
-  // BUG WAS: key.split('-')[1] was returning the 2nd UUID segment (e.g. "e29b")
-  // instead of "home"/"away" because UUIDs contain hyphens.
-  // FIX: use key.slice(matchId.length + 1) to reliably extract the side suffix.
   const saveLineups = async (matchId: string) => {
     if (!matchId) return;
     setSaving(true);
@@ -304,7 +295,6 @@ export default function AdminPage() {
       );
 
       for (const [key, players] of entries) {
-        // ✅ FIXED: slice off the matchId + the dash to get exactly "home" or "away"
         const side = key.slice(matchId.length + 1) as 'home' | 'away';
 
         if (side !== 'home' && side !== 'away') {
@@ -350,7 +340,6 @@ export default function AdminPage() {
     return existingLineups.filter(l => l.match_id === matchId && l.team_side === side);
   };
 
-  // ─── EXISTING FUNCTIONS ──────────────────────────────────────────────
   const toggleTransferWindow = async()=>{
     setSaving(true);
     const next=!transferWindow.is_open;
@@ -360,15 +349,58 @@ export default function AdminPage() {
     setSaving(false);
   };
 
+  // ─── FIXED toggleGWLock ────────────────────────────────────────────
+  // BUG FIX: Now accumulates GW points into total_points before locking
   const toggleGWLock = async()=>{
     setSaving(true);
     const next=!transferWindow.gameweek_locked;
+    
+    if(next){
+      // ✅ LOCKING GAMEWEEK: Accumulate points before locking
+      try {
+        const currentGw = transferWindow.gameweek;
+        
+        // Fetch all teams
+        const { data: teams } = await supabase.from('user_teams').select('id, user_id, total_points, players, captain_id');
+        const { data: gwPoints } = await supabase.from('player_gameweek_points').select('player_name, total_points').eq('gameweek', currentGw);
+        
+        // Map player points by name
+        const gwPtsMap: Record<string, number> = {};
+        (gwPoints || []).forEach((r: any) => { gwPtsMap[r.player_name] = r.total_points || 0; });
+        
+        // For each team, calculate GW points and add to total_points
+        const updates = (teams || []).map((t: any) => {
+          const squadPlayers: any[] = t.players || [];
+          const gwPoints = squadPlayers
+            .filter((p: any) => !p.isBench)
+            .reduce((sum: number, p: any) => {
+              const raw = gwPtsMap[p.name] ?? 0;
+              return sum + (t.captain_id === p.id ? raw * 2 : raw);
+            }, 0);
+          
+          const newTotal = (t.total_points || 0) + gwPoints;
+          return { id: t.id, total_points: newTotal };
+        });
+        
+        // Update all teams with accumulated points
+        for (const update of updates) {
+          await supabase.from('user_teams').update({ total_points: update.total_points }).eq('id', update.id);
+        }
+        
+        showMsg('success', `✓ GW${currentGw} points locked! Moving to GW${currentGw + 1}`);
+      } catch (err: any) {
+        showMsg('error', 'Failed to accumulate points: ' + err.message);
+        setSaving(false);
+        return;
+      }
+    }
+    
     const {error} = await supabase.from('transfer_window').update({gameweek_locked:next}).eq('id',1);
     if(error) showMsg('error',error.message);
     else{
       setTransferWindow(p=>({...p,gameweek_locked:next}));
       if(!next){await supabase.rpc('grant_free_transfers_all');showMsg('success','Gameweek UNLOCKED · 1 free transfer granted to all');}
-      else{await supabase.from('user_teams').update({transfers_this_window:0,transfer_cost_this_window:0}).neq('user_id','00000000-0000-0000-0000-000000000000');showMsg('success','Gameweek LOCKED');}
+      else{await supabase.from('user_teams').update({transfers_this_window:0,transfer_cost_this_window:0}).neq('user_id','00000000-0000-0000-0000-000000000000');}
     }
     setSaving(false);
   };
